@@ -7051,11 +7051,6 @@ fn list_monitors(app: AppHandle) -> Res<Vec<display::MonitorInfo>> {
 }
 
 #[tauri::command]
-fn move_launcher_window(app: AppHandle, monitor_id: Option<String>) -> Res<()> {
-    display::move_main_window_to_monitor(&app, monitor_id).map(|_| ()).map_err(Error::Msg)
-}
-
-#[tauri::command]
 fn prepare_tv_mode(app: AppHandle, monitor_id: Option<String>) -> Res<display::MonitorInfo> {
     display::prepare_tv_mode(&app, monitor_id).map_err(Error::Msg)
 }
@@ -7451,12 +7446,12 @@ fn take_setup_asked() -> Option<String> {
 static WINDOW_GEN: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Serialize, Deserialize, Default)]
-struct WindowPlace {
-    x: i32,
-    y: i32,
-    w: u32,
-    h: u32,
-    maximized: bool,
+pub(crate) struct WindowPlace {
+    pub(crate) x: i32,
+    pub(crate) y: i32,
+    pub(crate) w: u32,
+    pub(crate) h: u32,
+    pub(crate) maximized: bool,
 }
 
 /// Write the window's size and place a moment after it stops moving (or right away when closing).
@@ -7822,10 +7817,7 @@ pub fn run() {
         // On D-Bus as the app id, not the Tauri identifier: a Flatpak may only own names under its
         // own id, so a second copy would start instead of handing over.
         .plugin(single_instance().callback(|app, argv, _cwd| match play_arg(&argv) {
-            _ if argv.iter().any(|a| a == "--quit") => {
-                display::on_app_exit(app);
-                app.exit(0);
-            }
+            _ if argv.iter().any(|a| a == "--quit") => app.exit(0),
             // A game link from the website, clicked while the launcher is open (or by the clock).
             _ if argv.iter().skip(1).any(|a| a.to_ascii_lowercase().starts_with("recomplauncher:")) => {
                 if let Some(id) = argv.iter().skip(1).find_map(|a| link_game(a)) {
@@ -7877,7 +7869,6 @@ pub fn run() {
                         // would otherwise keep it running with no window, and opening it again
                         // would find nothing to show.
                         api.prevent_close();
-                        display::on_app_exit(app);
                         app.exit(0);
                     }
                 }
@@ -7939,7 +7930,6 @@ pub fn run() {
                 portable_remap(&dir);
             }
             trail::start(&dir);
-            display::recover_switched_display_on_startup(&dir);
             update_check_last(&dir);
             // Downloads slow down while a game is running (if the player wants that).
             {
@@ -8183,10 +8173,6 @@ pub fn run() {
                 None => {
                     if let Some(w) = app.get_webview_window("main") {
                         restore_window_place(&w, &app.state::<App>().dir);
-                        let launcher_monitor = app.state::<App>().lib.lock().unwrap().settings.launcher_monitor.clone();
-                        if let Err(e) = display::move_main_window_to_monitor(&app.handle(), Some(launcher_monitor)) {
-                            trail::note(format!("Normal launcher monitor selection failed: {e}"));
-                        }
                         if tv {
                             let pref = app.state::<App>().lib.lock().unwrap().settings.tv_monitor.clone();
                             match display::prepare_tv_mode(&app.handle(), Some(pref)) {
@@ -8236,7 +8222,7 @@ pub fn run() {
             remove_github,
             take_setup_asked,
             get_state, get_catalog, get_releases, net_state, check_updates, launcher_update, install, cancel, uninstall, play, stop, set_exe, open_folder,
-            save_settings, list_monitors, move_launcher_window, prepare_tv_mode, leave_tv_mode, open_url, libraries, move_game, game_sizes, backups, backup_now, restore_backup, pc_check, set_ui_scale, update_retry, ge_proton_install, proton_now, repo_readme, install_vcredist, scan_roms, rom_matches, copy_files, support_local,
+            save_settings, list_monitors, prepare_tv_mode, leave_tv_mode, open_url, libraries, move_game, game_sizes, backups, backup_now, restore_backup, pc_check, set_ui_scale, update_retry, ge_proton_install, proton_now, repo_readme, install_vcredist, scan_roms, rom_matches, copy_files, support_local,
             desktop_shortcut, open_app_control, fs_paste, portable_info, make_portable, add_to_steam, launcher_to_steam, recent_log, screenshots, open_shots, overlay_action, overlay_state, is_handheld, skip_backup, set_cover, art::art_source, art::art_open, art::art_save, art::art_search, art::art_for, all_screenshots, delete_screenshot,
             copy_screenshot, show_screenshot, controllers, prefetch_images, versions, build_check, news, game_info, mods_state, mods_online,
             mod_install, mod_remove, open_mods, send_report, beta_feedback, game_programs, run_program, game_root, boot::boot_builtin, update_launcher, resume_game, game_setup, set_game_copy, set_update_copy, set_game_setting, set_game_slider, set_game_binding, reset_game_bindings, usage::report_preview, usage::profile_report, usage::my_reports, usage::report_reply,
@@ -8249,7 +8235,6 @@ pub fn run() {
         .expect("RecompLauncher couldn't start")
         .run(|app, ev| {
             if let tauri::RunEvent::Exit = ev {
-                display::on_app_exit(app);
                 pads::stop();
                 ping::close(app);
             }
