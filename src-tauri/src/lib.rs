@@ -8176,7 +8176,7 @@ pub fn run() {
                         if tv {
                             let pref = app.state::<App>().lib.lock().unwrap().settings.tv_monitor.clone();
                             match display::prepare_tv_mode(&app.handle(), Some(pref)) {
-                                Ok(_) => { let _ = w.set_fullscreen(true); }
+                                Ok(_) => {}
                                 Err(e) => trail::note(format!("Big Picture startup aborted: {e}")),
                             }
                         }
